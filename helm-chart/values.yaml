@@ -1,0 +1,26 @@
+replicaCount: 2
+rollingUpdate:
+  maxSurge: 1        # Can create 1 extra pod during update
+  maxUnavailable: 0
+
+image:
+  repository: 951013217897.dkr.ecr.us-east-1.amazonaws.com/simple-java-app
+  tag: 1.0.0  # Placeholder, will be overridden
+  pullPolicy: IfNotPresent
+
+imagePullSecrets:
+  - name: ecr-secret
+
+service:
+  type: NodePort
+  port: 8080
+  targetPort: 8080
+  nodePort: 30000
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
