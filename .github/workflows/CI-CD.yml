@@ -43,10 +43,10 @@ jobs:
         run: mvn clean verify
       - name: Build Docker Image
         run: |
-          TAG="${{ steps.tag.outputs.TAG }}" echo "Building with tag: ${TAG}" docker
-          build -t $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} . docker tag
-          $ECR_REGISTRY/$ECR_REPOSITORY:${TAG}
-          $ECR_REGISTRY/$ECR_REPOSITORY:latest
+          TAG="${{ steps.tag.outputs.TAG }}"
+          echo "Building with tag: ${TAG}"
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} .
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} $ECR_REGISTRY/$ECR_REPOSITORY:latest
       - name: Run Trivy Scan
         uses: aquasecurity/trivy-action@master
         with:
