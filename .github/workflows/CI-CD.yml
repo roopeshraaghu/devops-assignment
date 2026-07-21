@@ -42,7 +42,7 @@ jobs:
       - name: Build and Test
         run: mvn clean verify
       - name: Build Docker Image
-        run: >
+        run: |
           TAG="${{ steps.tag.outputs.TAG }}" echo "Building with tag: ${TAG}" docker
           build -t $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} . docker tag
           $ECR_REGISTRY/$ECR_REPOSITORY:${TAG}
