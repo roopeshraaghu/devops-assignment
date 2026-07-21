@@ -1,43 +1,80 @@
+---
 name: CI/CD Pipeline
-
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Docker Image Tag (e.g., 1.0.0)'
+        description: Docker Image Tag (e.g., 1.0.0)
         required: false
-        default: '1.0.0'
+        default: 1.0.0
         type: string
-
 env:
   AWS_REGION: us-east-1
   ECR_REGISTRY: 951013217897.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: simple-java-app
   NAMESPACE: devops-demo
   RELEASE_NAME: simple-java-app
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
+      - name: Set Image Tag
+        id: tag
+        run: |
+          if [[ "${{ github.event.inputs.image_tag }}" != "" ]]; then
+            echo "TAG=${{ github.event.inputs.image_tag }}" >> $GITHUB_OUTPUT
+          else
+            echo "TAG=1.0.0" >> $GITHUB_OUTPUT
+          fi
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-      
       - name: Build and Test
         run: mvn clean verify
+      - name: Build Docker Image
+        run: >
+          TAG="${{ steps.tag.outputs.TAG }}"
 
+          echo "Building with tag: ${TAG}"
+
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} .
+
+          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} $ECR_REGISTRY/$ECR_REPOSITORY:latest
+      - name: Run Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{
+            steps.tag.outputs.TAG }}
+          format: sarif
+          output: trivy-results.sarif
+      - name: Upload Trivy Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-results.sarif
+      - name: Run Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{
+            steps.tag.outputs.TAG }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+      - name: Upload Trivy Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-results.sarif
       - name: SonarCloud Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -47,113 +84,3 @@ jobs:
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
             -Dsonar.qualitygate.wait=true
-
-      - name: Configure AWS credentials using IAM Role
-        uses: aws-actions/configure-aws-credentials@v6
-        with:
-          role-to-assume: arn:aws:iam::951013217897:role/Git-hub
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Build Docker Image
-        run: |
-          TAG="${{ steps.tag.outputs.TAG }}"
-          echo "Building with tag: ${TAG}"
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} $ECR_REGISTRY/$ECR_REPOSITORY:latest
-      - name: Run Trivy Scan
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: '${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.TAG }}'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
-      - name: Upload Trivy Report
-        uses: actions/upload-artifact@v7
-        with:
-          name: trivy-report-${{ github.run_number }}
-          path: trivy-results.sarif
-
-      - name: Run Trivy Scan
-        uses: aquasecurity/trivy-action@v0.36.0
-        with:
-          image-ref: '${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.TAG }}'
-          format: 'table'
-          severity: 'HIGH,CRITICAL'
-          ignore-unfixed: true
-
-
-      - name: Deploy to Nexus using Maven
-        env:
-          NEXUS_USERNAME: ${{ secrets.NEXUS_USERNAME }}
-          NEXUS_PASSWORD: ${{ secrets.NEXUS_PASSWORD }}
-          NEXUS_RELEASE_URL: ${{ secrets.NEXUS_RELEASE_URL }}
-          NEXUS_SNAPSHOT_URL: ${{ secrets.NEXUS_SNAPSHOT_URL }}
-        run: |
-          mvn -s .m2/settings.xml deploy -DskipTests \
-            -Dnexus.username=${NEXUS_USERNAME} \
-            -Dnexus.password='${NEXUS_PASSWORD}' \
-            -Dnexus.url.releases=${NEXUS_RELEASE_URL} \
-            -Dnexus.url.snapshots=${NEXUS_SNAPSHOT_URL}
-
-      - name: Upload JAR to GitHub Artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: java-app-jar-${{ steps.tag.outputs.TAG }}
-          path: target/*.jar
-          retention-days: 30
-
-
-      - name: Push Docker Image to ECR
-        run: |
-          TAG="${{ steps.tag.outputs.TAG }}"
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:${TAG}
-          docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
-      
-      - name: Copy Helm charts to EC2
-        uses: appleboy/scp-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          source: "helm-chart/"
-          target: "/home/ubuntu/"
-          strip_components: 0     
-      
-      - name: Deploy to KIND
-        uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_KEY }}
-          script: |
-            TAG="${{ steps.tag.outputs.TAG }}"
-            
-            # Login to ECR
-            aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
-              docker login --username AWS --password-stdin ${{ env.ECR_REGISTRY }}
-            
-            # Pull the image with the specified tag
-            docker pull ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${TAG}
-            
-            # Load into Kind cluster
-            kind load docker-image ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${TAG} --name demo
-            
-            # Deploy with Helm using the image tag
-            helm upgrade --install ${{ env.RELEASE_NAME }} /home/ubuntu/helm-chart \
-              --namespace ${{ env.NAMESPACE }} \
-              --create-namespace \
-              --set image.repository=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }} \
-              --set image.tag=${TAG} \
-              --set image.pullPolicy=IfNotPresent \
-              --wait \
-              --timeout 5m
-            
-            # Verify deployment
-            kubectl get pods -n ${{ env.NAMESPACE }}
-            kubectl get svc -n ${{ env.NAMESPACE }}
-            
-            # Delete helm folder
-            rm -rf /home/ubuntu/helm-chart
