@@ -42,10 +42,13 @@ jobs:
       - name: Build and Test
         run: mvn clean verify
       - name: Build Docker Image
-        run: |
+        run: >
           TAG="${{ steps.tag.outputs.TAG }}"
+
           echo "Building with tag: ${TAG}"
+
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} .
+
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} $ECR_REGISTRY/$ECR_REPOSITORY:latest
       - name: Run Trivy Scan
         uses: aquasecurity/trivy-action@master
@@ -54,6 +57,19 @@ jobs:
             steps.tag.outputs.TAG }}
           format: sarif
           output: trivy-results.sarif
+      - name: Upload Trivy Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-report
+          path: trivy-results.sarif
+      - name: Run Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{
+            steps.tag.outputs.TAG }}
+          format: table
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
       - name: Upload Trivy Report
         uses: actions/upload-artifact@v4
         with:
