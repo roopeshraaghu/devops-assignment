@@ -44,8 +44,8 @@ jobs:
         run: |
           mvn sonar:sonar \
             -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
-            -Dsonar.host.url=https://sonarcloud.io \
-            -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }} \
+            -Dsonar.projectKey=Devops \
             -Dsonar.qualitygate.wait=true
 
       - name: Configure AWS credentials using IAM Role
