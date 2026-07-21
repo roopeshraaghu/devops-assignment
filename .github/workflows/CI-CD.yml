@@ -1,34 +1,31 @@
+---
 name: CI/CD Pipeline
-
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       image_tag:
-        description: 'Docker Image Tag (e.g., 1.0.0)'
+        description: Docker Image Tag (e.g., 1.0.0)
         required: false
-        default: '1.0.0'
+        default: 1.0.0
         type: string
-
 env:
   AWS_REGION: us-east-1
   ECR_REGISTRY: 951013217897.dkr.ecr.us-east-1.amazonaws.com
   ECR_REPOSITORY: simple-java-app
   NAMESPACE: devops-demo
   RELEASE_NAME: simple-java-app
-
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
     permissions:
       id-token: write
       contents: read
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
       - name: Set Image Tag
         id: tag
         run: |
@@ -37,37 +34,31 @@ jobs:
           else
             echo "TAG=1.0.0" >> $GITHUB_OUTPUT
           fi
-      
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-      
       - name: Build and Test
         run: mvn clean verify
-		
       - name: Build Docker Image
-        run: |
-          TAG="${{ steps.tag.outputs.TAG }}"
-          echo "Building with tag: ${TAG}"
-          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} .
-          docker tag $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} $ECR_REGISTRY/$ECR_REPOSITORY:latest
-
+        run: >
+          TAG="${{ steps.tag.outputs.TAG }}" echo "Building with tag: ${TAG}" docker
+          build -t $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} . docker tag
+          $ECR_REGISTRY/$ECR_REPOSITORY:${TAG}
+          $ECR_REGISTRY/$ECR_REPOSITORY:latest
       - name: Run Trivy Scan
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: '${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.TAG }}'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
-
+          image-ref: ${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{
+            steps.tag.outputs.TAG }}
+          format: sarif
+          output: trivy-results.sarif
       - name: Upload Trivy Report
         uses: actions/upload-artifact@v4
         with:
           name: trivy-report
           path: trivy-results.sarif
-		
-
       - name: SonarCloud Scan
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -76,5 +67,4 @@ jobs:
             -Dsonar.login=${{ secrets.SONAR_TOKEN }} \
             -Dsonar.host.url=https://sonarcloud.io \
             -Dsonar.organization=${{ secrets.SONAR_ORGANIZATION }} \
-            -Dsonar.qualitygate.wait=true        
-
+            -Dsonar.qualitygate.wait=true
