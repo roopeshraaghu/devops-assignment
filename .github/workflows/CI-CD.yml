@@ -60,7 +60,7 @@ jobs:
       - name: Upload Trivy Report
         uses: actions/upload-artifact@v4
         with:
-          name: trivy-report
+          name: trivy-report-${{ github.run_number }}
           path: trivy-results.sarif
       - name: Run Trivy Scan
         uses: aquasecurity/trivy-action@master
