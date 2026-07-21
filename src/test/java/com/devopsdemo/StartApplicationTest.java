@@ -16,7 +16,7 @@ class StartApplicationTest {
 
         String viewName = app.index(model);
 
-        assertEquals("index", viewName);
+        assertEquals("index123", viewName);
         assertEquals(
                 "Git hub actions Deployed!!!! - Modified_Text",
                 model.getAttribute("msg")
