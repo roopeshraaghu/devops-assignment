@@ -4,12 +4,6 @@ on:
   push:
     branches: [ main ]
   workflow_dispatch:
-    inputs:
-      image_tag:
-        description: 'Docker Image Tag (e.g., 1.0.0)'
-        required: false
-        default: '1.0.0'
-        type: string
 
 env:
   AWS_REGION: us-east-1
@@ -17,6 +11,7 @@ env:
   ECR_REPOSITORY: simple-java-app
   NAMESPACE: devops-demo
   RELEASE_NAME: simple-java-app
+  IMAGE_TAG: 1.0.0
 
 jobs:
   build-and-deploy:
@@ -59,14 +54,14 @@ jobs:
 
       - name: Build Docker Image
         run: |
-          TAG="${{ steps.tag.outputs.TAG }}"
+          TAG="${{ env.IMAGE_TAG }}"
           echo "Building with tag: ${TAG}"
           docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} .
           docker tag $ECR_REGISTRY/$ECR_REPOSITORY:${TAG} $ECR_REGISTRY/$ECR_REPOSITORY:latest
       - name: Run Trivy Scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: '${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.TAG }}'
+          image-ref: '${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}'
           format: 'sarif'
           output: 'trivy-results.sarif'
 
@@ -79,7 +74,7 @@ jobs:
       - name: Run Trivy Scan
         uses: aquasecurity/trivy-action@v0.36.0
         with:
-          image-ref: '${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ steps.tag.outputs.TAG }}'
+          image-ref: '${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}'
           format: 'table'
           severity: 'HIGH,CRITICAL'
           ignore-unfixed: true
@@ -101,14 +96,14 @@ jobs:
       - name: Upload JAR to GitHub Artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: java-app-jar-${{ steps.tag.outputs.TAG }}
+          name: java-app-jar-${{ env.IMAGE_TAG }}
           path: target/*.jar
           retention-days: 30
 
 
       - name: Push Docker Image to ECR
         run: |
-          TAG="${{ steps.tag.outputs.TAG }}"
+          TAG="${{ env.IMAGE_TAG }}"
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:${TAG}
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:latest
       
@@ -129,7 +124,7 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            TAG="${{ steps.tag.outputs.TAG }}"
+            TAG="${{ env.IMAGE_TAG }}"
             
             # Login to ECR
             aws ecr get-login-password --region ${{ env.AWS_REGION }} | \
