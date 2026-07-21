@@ -45,7 +45,7 @@ jobs:
           java-version: 17
       
       - name: Build and Test
-        run: mvn clean package
+        run: mvn clean verify
 
       - name: Deploy to Nexus using Maven
         env:
