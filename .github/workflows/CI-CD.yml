@@ -142,13 +142,12 @@ jobs:
               --create-namespace \
               --set image.repository=${{ env.ECR_REGISTRY }}/${{ env.ECR_REPOSITORY }} \
               --set image.tag=${TAG} \
-              --set image.pullPolicy=IfNotPresent \
-              --wait \
-              --timeout 5m
+              --set image.pullPolicy=IfNotPresent
             
             # Verify deployment
-            kubectl get pods -n ${{ env.NAMESPACE }}
-            kubectl get svc -n ${{ env.NAMESPACE }}
+            kubectl rollout status deployment/${{ env.RELEASE_NAME }} \
+              -n ${{ env.NAMESPACE }} \
+              --timeout=300s
             
             # Delete helm folder
             rm -rf /home/ubuntu/helm-chart
